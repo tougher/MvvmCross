@@ -10,16 +10,17 @@ using MvvmCross.Views;
 
 namespace MvvmCross.Presenters
 {
+#nullable enable
     public interface IMvxAttributeViewPresenter : IMvxViewPresenter
     {
-        IMvxViewModelTypeFinder ViewModelTypeFinder { get; set; }
-        IMvxViewsContainer ViewsContainer { get; set; }
+        IMvxViewModelTypeFinder ViewModelTypeFinder { get; }
+        IMvxViewsContainer ViewsContainer { get; }
         IDictionary<Type, MvxPresentationAttributeAction> AttributeTypesToActionsDictionary { get; }
-        void RegisterAttributeTypes();
-
-        //TODO: Maybe move those to helper class
+        void RegisterAttributeTypes(IDictionary<Type, MvxPresentationAttributeAction> attributeTypes);
+        
         MvxBasePresentationAttribute GetPresentationAttribute(MvxViewModelRequest request);
         MvxBasePresentationAttribute CreatePresentationAttribute(Type viewModelType, Type viewType);
-        MvxBasePresentationAttribute GetOverridePresentationAttribute(MvxViewModelRequest request, Type viewType);
+        MvxBasePresentationAttribute? GetOverridePresentationAttribute(MvxViewModelRequest request, Type viewType);
     }
+#nullable restore
 }
