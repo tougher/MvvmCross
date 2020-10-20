@@ -30,6 +30,10 @@ This package contains the 'Core' libraries for MvvmCross</Description>
     <Compile Remove="Resources\*.cs" />
     <None Include="readme.txt" pack="true" PackagePath="." />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.9" />
+  </ItemGroup>
   
   <ItemGroup Condition=" $(TargetFramework.StartsWith('netstandard')) ">
     <Compile Include="Platforms\Netstandard\**\*.cs" />

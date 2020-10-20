@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross.Base;
 using MvvmCross.Commands;
 using MvvmCross.IoC;
@@ -20,7 +21,7 @@ namespace MvvmCross.Core
 {
     public abstract class MvxSetup : IMvxSetup
     {
-        protected static Action<IMvxIoCProvider> RegisterSetupDependencies { get; set; }
+        protected static Action<IServiceCollection> RegisterSetupDependencies { get; set; }
 
         protected static Func<IMvxSetup> SetupCreator { get; set; }
 
@@ -67,15 +68,15 @@ namespace MvvmCross.Core
                 return;
             }
             State = MvxSetupState.InitializingPrimary;
-            var iocProvider = InitializeIoC();
+            var serviceCollection = InitializeIoC();
 
             // Register the default setup dependencies before
             // invoking the static call back.
             // Developers can either extend the MvxSetup and override
             // the RegisterDefaultSetupDependencies method, or can provide a
             // callback method by setting the RegisterSetupDependencies method
-            RegisterDefaultSetupDependencies(iocProvider);
-            RegisterSetupDependencies?.Invoke(iocProvider);
+            RegisterDefaultSetupDependencies(serviceCollection);
+            RegisterSetupDependencies?.Invoke(serviceCollection);
             InitializeLoggingServices();
             SetupLog.Trace("Setup: Primary start");
             SetupLog.Trace("Setup: FirstChance start");
@@ -218,35 +219,63 @@ namespace MvvmCross.Core
             return Mvx.IoCProvider.Resolve<IMvxCommandCollectionBuilder>();
         }
 
-        protected virtual IMvxIoCProvider InitializeIoC()
+        protected virtual IServiceCollection InitializeIoC()
         {
             // initialize the IoC registry, then add it to itself
+            var serviceCollection = CreateServiceCollection();
             var iocProvider = CreateIocProvider();
-            Mvx.IoCProvider.RegisterSingleton(iocProvider);
-            Mvx.IoCProvider.RegisterSingleton<IMvxSetup>(this);
-            return iocProvider;
+
+            serviceCollection.AddSingleton(serviceCollection);
+            serviceCollection.AddSingleton(iocProvider);
+            serviceCollection.AddSingleton<IMvxSetup>(this);
+            
+            return serviceCollection;
         }
 
-        protected virtual void RegisterDefaultSetupDependencies(IMvxIoCProvider iocProvider)
+        protected virtual void RegisterDefaultSetupDependencies(IServiceCollection serviceCollection)
         {
-            RegisterLogProvider(iocProvider);
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxSettings, MvxSettings>();
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxStringToTypeParser, MvxStringToTypeParser>();
-            iocProvider.RegisterSingleton<IMvxPluginManager>(() => new MvxPluginManager(GetPluginConfiguration));
-            iocProvider.RegisterSingleton(CreateApp);
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxViewModelLoader, MvxViewModelLoader>();
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxNavigationService, IMvxViewModelLoader>(loader =>
-                new MvxNavigationService(null, loader));
-            iocProvider.RegisterSingleton(() => new MvxViewModelByNameLookup());
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxViewModelByNameLookup, MvxViewModelByNameLookup>(nameLookup => nameLookup);
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxViewModelByNameRegistry, MvxViewModelByNameLookup>(nameLookup => nameLookup);
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxViewModelTypeFinder, MvxViewModelViewTypeFinder>();
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxTypeToTypeLookupBuilder, MvxViewModelViewLookupBuilder>();
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxCommandCollectionBuilder, MvxCommandCollectionBuilder>();
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxNavigationSerializer, MvxStringDictionaryNavigationSerializer>();
-            iocProvider.LazyConstructAndRegisterSingleton<IMvxChildViewModelCache, MvxChildViewModelCache>();
+            RegisterLogProvider(serviceCollection);
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxSettings, MvxSettings>();
+            serviceCollection.AddSingleton<IMvxSettings>(sp => ActivatorUtilities.CreateInstance<MvxSettings>(sp));
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxStringToTypeParser, MvxStringToTypeParser>();
+            serviceCollection.AddSingleton<IMvxStringToTypeParser>(sp =>
+                ActivatorUtilities.CreateInstance<MvxStringToTypeParser>(sp));
+            // iocProvider.RegisterSingleton<IMvxPluginManager>(() => new MvxPluginManager(GetPluginConfiguration));
+            serviceCollection.AddSingleton<IMvxPluginManager>(_ => new MvxPluginManager(GetPluginConfiguration));
+            // iocProvider.RegisterSingleton(CreateApp);
+            serviceCollection.AddSingleton(_ => CreateApp());
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxViewModelLoader, MvxViewModelLoader>();
+            serviceCollection.AddSingleton<IMvxViewModelLoader>(sp =>
+                ActivatorUtilities.CreateInstance<MvxViewModelLoader>(sp));
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxNavigationService, IMvxViewModelLoader>(loader =>
+            //    new MvxNavigationService(null, loader));
+            serviceCollection.AddSingleton<IMvxNavigationService>(sp =>
+                new MvxNavigationService(null, ActivatorUtilities.CreateInstance<IMvxViewModelLoader>(sp)));
+            // iocProvider.RegisterSingleton(() => new MvxViewModelByNameLookup());
+            serviceCollection.AddSingleton(_ => new MvxViewModelByNameLookup());
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxViewModelByNameLookup, MvxViewModelByNameLookup>(nameLookup => nameLookup);
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxViewModelByNameRegistry, MvxViewModelByNameLookup>(nameLookup => nameLookup);
+            serviceCollection.AddSingleton<IMvxViewModelByNameRegistry>(sp =>
+                sp.GetRequiredService<IMvxViewModelByNameLookup>() as MvxViewModelByNameLookup);
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxViewModelTypeFinder, MvxViewModelViewTypeFinder>();
+            serviceCollection.AddSingleton<IMvxViewModelTypeFinder>(sp =>
+                ActivatorUtilities.CreateInstance<MvxViewModelViewTypeFinder>(sp));
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxTypeToTypeLookupBuilder, MvxViewModelViewLookupBuilder>();
+            serviceCollection.AddSingleton<IMvxTypeToTypeLookupBuilder>(sp =>
+                ActivatorUtilities.CreateInstance<MvxViewModelViewLookupBuilder>(sp));
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxCommandCollectionBuilder, MvxCommandCollectionBuilder>();
+            serviceCollection.AddSingleton<IMvxCommandCollectionBuilder>(sp =>
+                ActivatorUtilities.CreateInstance<MvxCommandCollectionBuilder>(sp));
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxNavigationSerializer, MvxStringDictionaryNavigationSerializer>();
+            serviceCollection.AddSingleton<IMvxNavigationSerializer>(sp =>
+                ActivatorUtilities.CreateInstance<MvxStringDictionaryNavigationSerializer>(sp));
+            // iocProvider.LazyConstructAndRegisterSingleton<IMvxChildViewModelCache, MvxChildViewModelCache>();
+            serviceCollection.AddSingleton<IMvxChildViewModelCache>(sp =>
+                ActivatorUtilities.CreateInstance<MvxChildViewModelCache>(sp));
 
-            iocProvider.RegisterType<IMvxCommandHelper, MvxWeakCommandHelper>();
+            // iocProvider.RegisterType<IMvxCommandHelper, MvxWeakCommandHelper>();
+            serviceCollection.AddTransient<IMvxCommandHelper>(sp =>
+                ActivatorUtilities.CreateInstance<MvxWeakCommandHelper>(sp));
         }
 
         protected virtual IMvxIocOptions CreateIocOptions()
@@ -257,6 +286,21 @@ namespace MvvmCross.Core
         protected virtual IMvxIoCProvider CreateIocProvider()
         {
             return MvxIoCProvider.Initialize(CreateIocOptions());
+        }
+        
+        protected virtual ServiceProviderOptions CreateServiceProviderOptions()
+        {
+            return new ServiceProviderOptions();
+        }
+        
+        protected virtual IServiceCollection CreateServiceCollection()
+        {
+            return new ServiceCollection();
+        }
+        
+        protected virtual IServiceProvider CreateServiceProvider(IServiceCollection serviceCollection)
+        {
+            return MvxServiceProvider.Initialize(serviceCollection, CreateServiceProviderOptions());
         }
 
         protected virtual void InitializeFirstChance()
@@ -277,7 +321,7 @@ namespace MvvmCross.Core
         public virtual MvxLogProviderType GetDefaultLogProviderType()
             => MvxLogProviderType.Console;
 
-        protected virtual void RegisterLogProvider(IMvxIoCProvider iocProvider)
+        protected virtual void RegisterLogProvider(IServiceCollection serviceCollection)
         {
             Func<IMvxLogProvider> logProviderCreator;
             switch (GetDefaultLogProviderType())
@@ -313,7 +357,7 @@ namespace MvvmCross.Core
 
             if (logProviderCreator != null)
             {
-                iocProvider.RegisterSingleton(logProviderCreator);
+                serviceCollection.AddSingleton(logProviderCreator);
             }
         }
 
@@ -573,7 +617,7 @@ namespace MvvmCross.Core
     public abstract class MvxSetup<TApplication> : MvxSetup
         where TApplication : class, IMvxApplication, new()
     {
-        protected override IMvxApplication CreateApp() => Mvx.IoCProvider.IoCConstruct<TApplication>();
+        protected override IMvxApplication CreateApp() => ActivatorUtilities.CreateInstance<TApplication>(Mvx.ServiceProvider);
 
         public override IEnumerable<Assembly> GetViewModelAssemblies()
         {

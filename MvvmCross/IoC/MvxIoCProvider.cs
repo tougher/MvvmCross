@@ -13,6 +13,7 @@ namespace MvvmCross.IoC
     ///
     /// Delegates to the <see cref="MvxIoCContainer"/> implementation
     /// </summary>
+    [Obsolete("Use Microsoft")]
     public class MvxIoCProvider
         : MvxSingleton<IMvxIoCProvider>, IMvxIoCProvider
     {
