@@ -2,15 +2,60 @@
 // The .NET Foundation licenses this file to you under the MS-PL license.
 // See the LICENSE file in the project root for more information.
 
+using System;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross.Base;
+using MvvmCross.Core;
 using MvvmCross.IoC;
+using MvvmCross.ViewModels;
+using MvvmCross.Views;
 using Xunit;
+// ReSharper disable VirtualMemberCallInConstructor
 
 namespace MvvmCross.UnitTest.Base
 {
     [Collection("MvxTest")]
     public class MvxIocPropertyInjectionTest
     {
+        private Setup _setup;
+        private IMvxIoCProvider _iocProvider;
+
+        public MvxIocPropertyInjectionTest()
+        {
+            _setup = new Setup();
+            _setup.InitializePrimary();
+            _iocProvider = CreateIoCProvider();
+        }
+
+        protected virtual IMvxIoCProvider CreateIoCProvider(IMvxIocOptions options = null)
+        {
+            return MvxIoCProvider.Initialize(_setup);
+        }
+        
+        #region Mocked Setup
+
+        private class Setup : MvxSetup
+        {
+            protected override IMvxApplication CreateApp() => throw new NotImplementedException();
+            protected override IMvxViewsContainer CreateViewsContainer() => throw new NotImplementedException();
+            protected override IMvxViewDispatcher CreateViewDispatcher() => throw new NotImplementedException();
+            protected override IMvxNameMapping CreateViewToViewModelNaming() => throw new NotImplementedException();
+
+            public override void InitializePrimary()
+            {
+                var serviceCollection = InitializeIoC();
+                ServiceCollection = serviceCollection;
+            }
+
+            public override IServiceProvider InitializeSecondary()
+            {
+                ServiceProvider = BuildServiceProvider(new ServiceProviderOptions());
+                return ServiceProvider;
+            }
+        }
+        
+        #endregion
+        
         public interface IA
         {
         }
@@ -52,7 +97,8 @@ namespace MvvmCross.UnitTest.Base
         public void TryResolve_WithNoInjection_NothingGetsInjected()
         {
             MvxSingleton.ClearAllSingletons();
-            var instance = MvxIoCProvider.Initialize();
+            //var instance = MvxIoCProvider.Initialize();
+            var instance = CreateIoCProvider();
 
             Mvx.IoCProvider.RegisterType<IA, A>();
             Mvx.IoCProvider.RegisterType<IB, B>();
@@ -81,7 +127,8 @@ namespace MvvmCross.UnitTest.Base
                     InjectIntoProperties = MvxPropertyInjection.MvxInjectInterfaceProperties
                 }
             };
-            var instance = MvxIoCProvider.Initialize(options);
+            //var instance = MvxIoCProvider.Initialize(options);
+            var instance = CreateIoCProvider();
 
             Mvx.IoCProvider.RegisterType<IA, A>();
             Mvx.IoCProvider.RegisterType<IB, B>();
@@ -111,7 +158,8 @@ namespace MvvmCross.UnitTest.Base
                     InjectIntoProperties = MvxPropertyInjection.AllInterfaceProperties
                 }
             };
-            var instance = MvxIoCProvider.Initialize(options);
+            //var instance = MvxIoCProvider.Initialize(options);
+            var instance = CreateIoCProvider();
 
             Mvx.IoCProvider.RegisterType<IA, A>();
             Mvx.IoCProvider.RegisterType<IB, B>();

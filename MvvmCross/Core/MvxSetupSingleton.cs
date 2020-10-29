@@ -5,6 +5,7 @@
 using System;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross.Base;
 using MvvmCross.Exceptions;
 using MvvmCross.Logging;
@@ -182,9 +183,10 @@ namespace MvvmCross.Core
             Task.Run(async () =>
             {
                 ExceptionDispatchInfo setupException = null;
+                IServiceProvider serviceProvider = null;
                 try
                 {
-                    _setup.InitializeSecondary();
+                    serviceProvider = _setup.InitializeSecondary();
                 }
                 catch(Exception ex)
                 {
@@ -206,7 +208,7 @@ namespace MvvmCross.Core
 
                 if (monitor != null)
                 {
-                    var dispatcher = Mvx.IoCProvider.GetSingleton<IMvxMainThreadAsyncDispatcher>();
+                    var dispatcher = serviceProvider.GetRequiredService<IMvxMainThreadAsyncDispatcher>();
                     await dispatcher.ExecuteOnMainThreadAsync(async () =>
                     {
                         if (monitor != null)

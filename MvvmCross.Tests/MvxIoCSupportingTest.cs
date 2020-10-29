@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MS-PL license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Globalization;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross.Base;
 using MvvmCross.Binding;
 using MvvmCross.Core;
@@ -11,7 +13,7 @@ using MvvmCross.Logging;
 
 namespace MvvmCross.Tests
 {
-    public class MvxIoCSupportingTest
+    public class MvxIoCSupportingTest : IMvxIocServices
     {
         private TestLogger _logger;
 
@@ -39,14 +41,23 @@ namespace MvvmCross.Tests
             Reset();
             var logProvider = CreateLogProvider();
             var log = CreateLog(logProvider);
-            Ioc = MvxIoCProvider.Initialize(options ?? CreateIocOptions());
+            ServiceCollection = new ServiceCollection();
+            Mvx.ServiceCollection = ServiceCollection;
+            Ioc = MvxIoCProvider.Initialize(this, options ?? CreateIocOptions());
             Ioc.RegisterSingleton(Ioc);
             Ioc.RegisterSingleton(logProvider);
             Ioc.RegisterSingleton(log);
 
             InitializeSingletonCache();
             InitializeMvxSettings();
+            
+            ServiceProvider = ServiceCollection.BuildServiceProvider();
+            Mvx.ServiceProvider = ServiceProvider;
+            
             AdditionalSetup();
+            
+            ServiceProvider = ServiceCollection.BuildServiceProvider();
+            Mvx.ServiceProvider = ServiceProvider;
         }
 
         public void InitializeSingletonCache()
@@ -97,6 +108,19 @@ namespace MvvmCross.Tests
             var invariantCulture = CultureInfo.InvariantCulture;
             CultureInfo.DefaultThreadCurrentCulture = invariantCulture;
             CultureInfo.DefaultThreadCurrentUICulture = invariantCulture;
+        }
+
+        public IServiceCollection ServiceCollection { get; set; }
+        public IServiceProvider ServiceProvider { get; set; }
+        
+        public IServiceProvider BuildServiceProvider(ServiceProviderOptions options)
+        {
+            return ServiceProvider = ServiceCollection.BuildServiceProvider(options);
+        }
+
+        public void InvalidateServiceProvider()
+        {
+            ServiceProvider = null;
         }
     }
 }

@@ -6,6 +6,7 @@ using System;
 
 namespace MvvmCross.IoC
 {
+    [Obsolete("Use Microsoft.Extensions.DependencyInjection instead")]
     public class MvxIocOptions : IMvxIocOptions
     {
         public MvxIocOptions()
@@ -13,6 +14,8 @@ namespace MvvmCross.IoC
             TryToDetectSingletonCircularReferences = true;
             TryToDetectDynamicCircularReferences = true;
             CheckDisposeIfPropertyInjectionFails = true;
+            BuildServiceProviderAtFirstResolve = true;
+            InvalidateServiceProviderAtRegistrationsAfterBuild = true;
             PropertyInjectorType = typeof(MvxPropertyInjector);
             PropertyInjectorOptions = new MvxPropertyInjectorOptions();
         }
@@ -22,5 +25,7 @@ namespace MvvmCross.IoC
         public bool CheckDisposeIfPropertyInjectionFails { get; set; }
         public Type PropertyInjectorType { get; set; }
         public IMvxPropertyInjectorOptions PropertyInjectorOptions { get; set; }
+        public bool BuildServiceProviderAtFirstResolve { get; set; }
+        public bool InvalidateServiceProviderAtRegistrationsAfterBuild { get; set; }
     }
 }

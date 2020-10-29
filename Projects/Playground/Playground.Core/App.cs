@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MS-PL license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross;
 using MvvmCross.IoC;
 using MvvmCross.Localization;
@@ -23,9 +25,9 @@ namespace Playground.Core
             CreatableTypes()
                 .EndingWith("Service")
                 .AsInterfaces()
-                .RegisterAsLazySingleton();
+                .RegisterAsLazySingleton(IocServices.ServiceCollection);
 
-            Mvx.IoCProvider.RegisterSingleton<IMvxTextProvider>(new TextProviderBuilder().TextProvider);
+            IocServices.ServiceCollection.AddSingleton(new TextProviderBuilder().TextProvider);
 
             RegisterAppStart<RootViewModel>();
         }

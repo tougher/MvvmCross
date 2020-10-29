@@ -13,5 +13,7 @@ namespace MvvmCross.IoC
         bool CheckDisposeIfPropertyInjectionFails { get; }
         Type PropertyInjectorType { get; }
         IMvxPropertyInjectorOptions PropertyInjectorOptions { get; }
+        bool BuildServiceProviderAtFirstResolve { get; set; }
+        bool InvalidateServiceProviderAtRegistrationsAfterBuild { get; set; }
     }
 }

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross.Base;
 using MvvmCross.Exceptions;
 using MvvmCross.Logging;
@@ -15,19 +16,47 @@ namespace MvvmCross.IoC
     public class MvxIoCContainer
         : IMvxIoCProvider
     {
-        private readonly Dictionary<Type, IResolver> _resolvers = new Dictionary<Type, IResolver>();
-        private readonly Dictionary<Type, List<Action>> _waiters = new Dictionary<Type, List<Action>>();
-        private readonly Dictionary<Type, bool> _circularTypeDetection = new Dictionary<Type, bool>();
-        private readonly object _lockObject = new object();
-        private readonly IMvxIocOptions _options;
         private readonly IMvxPropertyInjector _propertyInjector;
-        private readonly IMvxIoCProvider _parentProvider;
 
-        protected object LockObject => _lockObject;
+        private readonly IMvxIocServices _iocServices;
+        private readonly IMvxIocOptions _options;
 
-        protected IMvxIocOptions Options => _options;
+        private readonly IServiceCollection _collection;
+        public IServiceCollection ServiceCollection => _collection ?? _iocServices.ServiceCollection;
+        
+        private IServiceProvider _provider;
+        public IServiceProvider ServiceProvider
+        {
+            get => _provider ?? _iocServices.ServiceProvider;
+        }
 
-        public MvxIoCContainer(IMvxIocOptions options, IMvxIoCProvider parentProvider = null)
+        public IServiceProvider BuildServiceProvider(ServiceProviderOptions options)
+        {
+            if (_iocServices != null)
+            {
+                if (ServiceCollection == null) return null;
+                ServiceCollection.BuildServiceProvider(options);
+                return ServiceProvider;
+            }
+            
+            if (_collection == null) return null;
+            _provider = _collection.BuildServiceProvider(options);
+            return _provider;
+        }
+
+        public void InvalidateServiceProvider()
+        {
+            if (_iocServices != null)
+            {
+                if (ServiceProvider == null) return;
+                _iocServices.InvalidateServiceProvider();
+                return;
+            }
+            
+            _provider = null;
+        }
+
+        public MvxIoCContainer(IMvxIocOptions options, IMvxIocServices parentIocServices = null)
         {
             _options = options ?? new MvxIocOptions();
             if (_options.PropertyInjectorType != null)
@@ -38,177 +67,32 @@ namespace MvvmCross.IoC
             {
                 RegisterSingleton(typeof(IMvxPropertyInjector), _propertyInjector);
             }
-            if (parentProvider != null)
+            if (parentIocServices != null)
             {
-                _parentProvider = parentProvider;
+                _iocServices = parentIocServices;
             }
         }
 
-        public MvxIoCContainer(IMvxIoCProvider parentProvider)
-            : this(null, parentProvider)
+        public MvxIoCContainer(IMvxIocServices parentIocServices)
+            : this(null, parentIocServices)
         {
-            if (parentProvider == null)
+            if (parentIocServices == null)
             {
-                throw new ArgumentNullException(nameof(parentProvider), "Provide a parent ioc provider to this constructor");
+                throw new ArgumentNullException(nameof(parentIocServices), "Provide a parent ioc services to this constructor");
             }
-        }
-
-        public interface IResolver
-        {
-            object Resolve();
-
-            ResolverType ResolveType { get; }
-
-            void SetGenericTypeParameters(Type[] genericTypeParameters);
-        }
-
-        public class ConstructingResolver : IResolver
-        {
-            private readonly Type _type;
-            private readonly IMvxIoCProvider _parent;
-
-            public ConstructingResolver(Type type, IMvxIoCProvider parent)
-            {
-                _type = type;
-                _parent = parent;
-            }
-
-            public object Resolve()
-            {
-                return _parent.IoCConstruct(_type);
-            }
-
-            public void SetGenericTypeParameters(Type[] genericTypeParameters)
-            {
-                throw new InvalidOperationException("This Resolver does not set generic type parameters");
-            }
-
-            public ResolverType ResolveType => ResolverType.DynamicPerResolve;
-        }
-
-        public class FuncConstructingResolver : IResolver
-        {
-            private readonly Func<object> _constructor;
-
-            public FuncConstructingResolver(Func<object> constructor)
-            {
-                _constructor = constructor;
-            }
-
-            public object Resolve()
-            {
-                return _constructor();
-            }
-
-            public void SetGenericTypeParameters(Type[] genericTypeParameters)
-            {
-                throw new InvalidOperationException("This Resolver does not set generic type parameters");
-            }
-
-            public ResolverType ResolveType => ResolverType.DynamicPerResolve;
-        }
-
-        public class SingletonResolver : IResolver
-        {
-            private readonly object _theObject;
-
-            public SingletonResolver(object theObject)
-            {
-                _theObject = theObject;
-            }
-
-            public object Resolve()
-            {
-                return _theObject;
-            }
-
-            public void SetGenericTypeParameters(Type[] genericTypeParameters)
-            {
-                throw new InvalidOperationException("This Resolver does not set generic type parameters");
-            }
-
-            public ResolverType ResolveType => ResolverType.Singleton;
-        }
-
-        public class ConstructingSingletonResolver : IResolver
-        {
-            private readonly object _syncObject = new object();
-            private readonly Func<object> _constructor;
-            private object _theObject;
-
-            public ConstructingSingletonResolver(Func<object> theConstructor)
-            {
-                _constructor = theConstructor;
-            }
-
-            public object Resolve()
-            {
-                if (_theObject != null)
-                    return _theObject;
-
-                lock (_syncObject)
-                {
-                    if (_theObject == null)
-                        _theObject = _constructor();
-                }
-
-                return _theObject;
-            }
-
-            public void SetGenericTypeParameters(Type[] genericTypeParameters)
-            {
-                throw new InvalidOperationException("This Resolver does not set generic type parameters");
-            }
-
-            public ResolverType ResolveType => ResolverType.Singleton;
-        }
-
-        public class ConstructingOpenGenericResolver : IResolver
-        {
-            private readonly Type _genericTypeDefinition;
-            private readonly IMvxIoCProvider _parent;
-
-            private Type[] _genericTypeParameters;
-
-            public ConstructingOpenGenericResolver(Type genericTypeDefinition, IMvxIoCProvider parent)
-            {
-                _genericTypeDefinition = genericTypeDefinition;
-                _parent = parent;
-            }
-
-            public void SetGenericTypeParameters(Type[] genericTypeParameters)
-            {
-                _genericTypeParameters = genericTypeParameters;
-            }
-
-            public object Resolve()
-            {
-                return _parent.IoCConstruct(_genericTypeDefinition.MakeGenericType(_genericTypeParameters));
-            }
-
-            public ResolverType ResolveType => ResolverType.DynamicPerResolve;
         }
 
         public bool CanResolve<T>()
             where T : class
         {
-            return CanResolve(typeof(T));
+            CheckCollection();
+            return ServiceCollection.Any(s => s.ServiceType == typeof(T));
         }
 
         public bool CanResolve(Type t)
         {
-            lock (_lockObject)
-            {
-                if (_resolvers.ContainsKey(t))
-                {
-                    return true;
-                }
-                if (_parentProvider != null && _parentProvider.CanResolve(t))
-                {
-                    return true;
-                }
-                return false;
-            }
+            CheckCollection();
+            return ServiceCollection.Any(s => s.ServiceType == t);
         }
 
         public bool TryResolve<T>(out T resolved)
@@ -216,80 +100,111 @@ namespace MvvmCross.IoC
         {
             try
             {
-                object item;
-                var toReturn = TryResolve(typeof(T), out item);
-                resolved = (T)item;
-                return toReturn;
+                CheckProvider();
+                resolved = ServiceProvider.GetService<T>();
+                return resolved != null;
             }
-            catch (MvxIoCResolveException)
+            catch (Exception e)
             {
-                resolved = (T)typeof(T).CreateDefault();
-                return false;
+                if (e.InnerException != null) MvxLog.Instance?.Error(e.InnerException.Message);
             }
+
+            resolved = null;
+            return false;
         }
 
         public bool TryResolve(Type type, out object resolved)
         {
-            lock (_lockObject)
+            try
             {
-                return InternalTryResolve(type, out resolved);
+                CheckProvider();
+                resolved = ServiceProvider.GetService(type);
+                return resolved != null;
             }
+            catch (AggregateException e)
+            {
+                if (e.InnerException != null) MvxLog.Instance?.Error(e.InnerException.Message);
+            }
+
+            resolved = null;
+            return false;
         }
 
         public T Resolve<T>()
             where T : class
         {
-            return (T)Resolve(typeof(T));
+            try
+            {
+                CheckProvider();
+                
+                return ServiceProvider.GetRequiredService<T>();
+            }
+            catch
+            {
+                throw new MvxIoCResolveException("Failed to resolve type {0}", typeof(T).FullName);
+            }
         }
 
         public object Resolve(Type t)
         {
-            lock (_lockObject)
+            try
             {
-                object resolved;
-                if (!InternalTryResolve(t, out resolved))
-                {
-                    throw new MvxIoCResolveException("Failed to resolve type {0}", t.FullName);
-                }
-                return resolved;
+                CheckProvider();
+                return ServiceProvider.GetRequiredService(t);
+            }
+            catch
+            {
+                throw new MvxIoCResolveException("Failed to resolve type {0}", t.FullName);
             }
         }
 
         public T GetSingleton<T>()
             where T : class
         {
-            return (T)GetSingleton(typeof(T));
+            try{
+                CheckProvider();
+                return ServiceProvider.GetRequiredService<T>();
+            }
+            catch
+            {
+                throw new MvxIoCResolveException("Failed to resolve type {0}", typeof(T).FullName);
+            }
         }
 
         public object GetSingleton(Type t)
         {
-            lock (_lockObject)
+            try{
+                CheckProvider();
+                return ServiceProvider.GetRequiredService(t);
+            }
+            catch
             {
-                object resolved;
-                if (!InternalTryResolve(t, ResolverType.Singleton, out resolved))
-                {
-                    throw new MvxIoCResolveException("Failed to resolve type {0}", t.FullName);
-                }
-                return resolved;
+                throw new MvxIoCResolveException("Failed to resolve type {0}", t.FullName);
             }
         }
 
         public T Create<T>()
             where T : class
         {
-            return (T)Create(typeof(T));
+            try{
+                CheckProvider();
+                return ServiceProvider.GetRequiredService<T>();
+            }
+            catch
+            {
+                throw new MvxIoCResolveException("Failed to resolve type {0}", typeof(T).FullName);
+            }
         }
 
         public object Create(Type t)
         {
-            lock (_lockObject)
+            try{
+                CheckProvider();
+                return ServiceProvider.GetRequiredService(t);
+            }
+            catch
             {
-                object resolved;
-                if (!InternalTryResolve(t, ResolverType.DynamicPerResolve, out resolved))
-                {
-                    throw new MvxIoCResolveException("Failed to resolve type {0}", t.FullName);
-                }
-                return resolved;
+                throw new MvxIoCResolveException("Failed to resolve type {0}", t.FullName);
             }
         }
 
@@ -297,115 +212,137 @@ namespace MvvmCross.IoC
             where TInterface : class
             where TToConstruct : class, TInterface
         {
-            RegisterType(typeof(TInterface), typeof(TToConstruct));
+            CheckCollection();
+            ServiceCollection.AddTransient<TInterface, TToConstruct>();
         }
 
         public void RegisterType<TInterface>(Func<TInterface> constructor)
             where TInterface : class
         {
-            var resolver = new FuncConstructingResolver(constructor);
-            InternalSetResolver(typeof(TInterface), resolver);
+            CheckCollection();
+            ServiceCollection.AddTransient<TInterface>(sp => constructor());
         }
 
         public void RegisterType(Type t, Func<object> constructor)
         {
-            var resolver = new FuncConstructingResolver(() =>
-            {
-                var ret = constructor();
-                if (ret != null && !t.IsInstanceOfType(ret))
-                    throw new MvxIoCResolveException("Constructor failed to return a compatibly object for type {0}", t.FullName);
-
-                return ret;
-            });
-
-            InternalSetResolver(t, resolver);
+            //_provider.RegisterType(t, constructor);
+            CheckCollection();
+            ServiceCollection.AddTransient(t, sp => constructor());
         }
 
         public void RegisterType(Type interfaceType, Type constructType)
         {
-            IResolver resolver = null;
-            if (interfaceType.GetTypeInfo().IsGenericTypeDefinition)
-            {
-                resolver = new ConstructingOpenGenericResolver(constructType, this);
-            }
-            else
-            {
-                resolver = new ConstructingResolver(constructType, this);
-            }
-
-            InternalSetResolver(interfaceType, resolver);
+            //_provider.RegisterType(interfaceType, constructType);
+            CheckCollection();
+            ServiceCollection.AddTransient(interfaceType, constructType);
         }
 
         public void RegisterSingleton<TInterface>(TInterface theObject)
             where TInterface : class
         {
-            RegisterSingleton(typeof(TInterface), theObject);
+            //_provider.RegisterSingleton(theObject);
+            CheckCollection();
+            ServiceCollection.AddSingleton(theObject);
         }
 
         public void RegisterSingleton(Type interfaceType, object theObject)
         {
-            InternalSetResolver(interfaceType, new SingletonResolver(theObject));
+            //_provider.RegisterSingleton(interfaceType, theObject);
+            CheckCollection();
+            ServiceCollection.AddSingleton(interfaceType, theObject);
         }
 
         public void RegisterSingleton<TInterface>(Func<TInterface> theConstructor)
             where TInterface : class
         {
-            RegisterSingleton(typeof(TInterface), theConstructor);
+            //_provider.RegisterSingleton(theConstructor);
+            CheckCollection();
+            var it = typeof(TInterface);
+            ServiceCollection.AddSingleton<TInterface>(sp =>
+            {
+                var ctor = theConstructor();
+                return ctor;
+            });
         }
 
         public void RegisterSingleton(Type interfaceType, Func<object> theConstructor)
         {
-            InternalSetResolver(interfaceType, new ConstructingSingletonResolver(theConstructor));
-        }
-
-        public object IoCConstruct(Type type)
-        {
-            return IoCConstruct(type, default(IDictionary<string, object>));
+            //_provider.RegisterSingleton(interfaceType, theConstructor);
+            CheckCollection();
+            ServiceCollection.AddSingleton(interfaceType, sp => theConstructor());
         }
 
         public T IoCConstruct<T>()
             where T : class
         {
-            return (T)IoCConstruct(typeof(T));
+            CheckProvider();
+            return ActivatorUtilities.CreateInstance<T>(ServiceProvider);
         }
 
-        public virtual object IoCConstruct(Type type, object arguments)
+        public virtual object IoCConstruct(Type type)
         {
-            return IoCConstruct(type, arguments.ToPropertyDictionary());
+            CheckProvider();
+
+            try
+            {
+                return ActivatorUtilities.CreateInstance(ServiceProvider, type);
+            }
+            catch (InvalidOperationException e)
+            {
+                throw new MvxIoCResolveException(e, "Failed to construct {0}", type.Name);
+            }
         }
 
-        public virtual T IoCConstruct<T>(IDictionary<string, object> arguments)
-            where T : class
+        public T IoCConstruct<T>(IDictionary<string, object> arguments) where T : class
         {
-            return (T)IoCConstruct(typeof(T), arguments);
-        }
-
-        public virtual T IoCConstruct<T>(object arguments)
-            where T : class
-        {
-            return (T)IoCConstruct(typeof(T), arguments.ToPropertyDictionary());
-        }
-
-        public virtual T IoCConstruct<T>(params object[] arguments) where T : class
-        {
-            return (T)IoCConstruct(typeof(T), arguments);
-        }
-
-        public virtual object IoCConstruct(Type type, params object[] arguments)
-        {
-            var selectedConstructor = type.FindApplicableConstructor(arguments);
+            //return _provider.IoCConstruct<T>(arguments);
+            CheckProvider();
+            var selectedConstructor = typeof(T).FindApplicableConstructor(arguments);
 
             if (selectedConstructor == null)
             {
-                throw new MvxIoCResolveException($"Failed to find constructor for type { type.FullName } with arguments: { arguments.Select(x => x.GetType().Name + ", ") }");
+                throw new MvxIoCResolveException("Failed to find constructor for type {0}", typeof(T).FullName);
             }
 
-            var parameters = GetIoCParameterValues(type, selectedConstructor, arguments);
-            return IoCConstruct(type, selectedConstructor, parameters.ToArray());
+            var parameters = GetIoCParameterValues(typeof(T), selectedConstructor, arguments);
+            return ActivatorUtilities.CreateInstance<T>(ServiceProvider, parameters);
         }
 
-        public virtual object IoCConstruct(Type type, IDictionary<string, object> arguments)
+        public T IoCConstruct<T>(params object[] arguments) where T : class
         {
+            //return _provider.IoCConstruct<T>(arguments);
+            CheckProvider();
+            
+            try
+            {
+                return ActivatorUtilities.CreateInstance<T>(ServiceProvider, arguments);
+            }
+            catch (InvalidOperationException e)
+            {
+                throw new MvxIoCResolveException(e, "Failed to construct {0}", typeof(T).Name);
+            }
+        }
+
+        public T IoCConstruct<T>(object arguments) where T : class
+        {
+            //return _provider.IoCConstruct<T>(arguments);
+            CheckProvider();
+            var argsDict = arguments.ToPropertyDictionary();
+            var selectedConstructor = typeof(T).FindApplicableConstructor(argsDict);
+
+            if (selectedConstructor == null)
+            {
+                throw new MvxIoCResolveException("Failed to find constructor for type {0}", typeof(T).FullName);
+            }
+
+            var parameters = GetIoCParameterValues(typeof(T), selectedConstructor, argsDict);
+            return ActivatorUtilities.CreateInstance<T>(ServiceProvider, parameters);
+        }
+
+        public object IoCConstruct(Type type, IDictionary<string, object> arguments = null)
+        {
+            //return _provider.IoCConstruct(type, arguments);
+            CheckProvider();
             var selectedConstructor = type.FindApplicableConstructor(arguments);
 
             if (selectedConstructor == null)
@@ -414,34 +351,30 @@ namespace MvvmCross.IoC
             }
 
             var parameters = GetIoCParameterValues(type, selectedConstructor, arguments);
-            return IoCConstruct(type, selectedConstructor, parameters.ToArray());
+            return ActivatorUtilities.CreateInstance(ServiceProvider, type, parameters);
         }
 
-        protected virtual object IoCConstruct(Type type, ConstructorInfo constructor, object[] arguments)
+        public object IoCConstruct(Type type, object arguments)
         {
-            object toReturn;
-            try
+            //return _provider.IoCConstruct(type, arguments);
+            CheckProvider();
+            var argsDict = arguments.ToPropertyDictionary();
+            var selectedConstructor = type.FindApplicableConstructor(argsDict);
+
+            if (selectedConstructor == null)
             {
-                toReturn = constructor.Invoke(arguments);
-            }
-            catch (TargetInvocationException invocation)
-            {
-                throw new MvxIoCResolveException(invocation, "Failed to construct {0}", type.Name);
+                throw new MvxIoCResolveException("Failed to find constructor for type {0}", type.FullName);
             }
 
-            try
-            {
-                InjectProperties(toReturn);
-            }
-            catch (Exception)
-            {
-                if (!Options.CheckDisposeIfPropertyInjectionFails)
-                    throw;
+            var parameters = GetIoCParameterValues(type, selectedConstructor, argsDict);
+            return ActivatorUtilities.CreateInstance(ServiceProvider, type, parameters);
+        }
 
-                toReturn.DisposeIfDisposable();
-                throw;
-            }
-            return toReturn;
+        public object IoCConstruct(Type type, params object[] arguments)
+        {
+            //return _provider.IoCConstruct(type, arguments);
+            CheckProvider();
+            return ActivatorUtilities.CreateInstance(ServiceProvider, type, arguments);
         }
 
         public void CallbackWhenRegistered<T>(Action action)
@@ -451,22 +384,23 @@ namespace MvvmCross.IoC
 
         public void CallbackWhenRegistered(Type type, Action action)
         {
-            lock (_lockObject)
+            if (!(ServiceCollection is MvxServiceCollectionCallbackDecorator callbackCollection))
             {
-                if (!CanResolve(type))
+                return;
+            }
+                
+            if (!CanResolve(type))
+            {
+                if (callbackCollection.Waiters.TryGetValue(type, out var actions))
                 {
-                    List<Action> actions;
-                    if (_waiters.TryGetValue(type, out actions))
-                    {
-                        actions.Add(action);
-                    }
-                    else
-                    {
-                        actions = new List<Action> { action };
-                        _waiters[type] = actions;
-                    }
-                    return;
+                    actions.Add(action);
                 }
+                else
+                {
+                    actions = new List<Action> { action };
+                    callbackCollection.Waiters[type] = actions;
+                }
+                return;
             }
 
             // if we get here then the type is already registered - so call the aciton immediately
@@ -475,204 +409,16 @@ namespace MvvmCross.IoC
 
         public void CleanAllResolvers()
         {
-            _resolvers.Clear();
-            _waiters.Clear();
-            _circularTypeDetection.Clear();
+            //_provider.CleanAllResolvers();
+            CheckCollection();
+            ServiceCollection.Clear();
         }
 
-        public enum ResolverType
+        public IMvxIoCProvider CreateChildContainer()
         {
-            DynamicPerResolve,
-            Singleton,
-            Unknown
-        }
-
-        public virtual IMvxIoCProvider CreateChildContainer() => new MvxIoCContainer(this);
-
-        private static readonly ResolverType? ResolverTypeNoneSpecified = null;
-
-        private bool Supports(IResolver resolver, ResolverType? requiredResolverType)
-        {
-            if (!requiredResolverType.HasValue)
-                return true;
-            return resolver.ResolveType == requiredResolverType.Value;
-        }
-
-        private bool InternalTryResolve(Type type, out object resolved)
-        {
-            return InternalTryResolve(type, ResolverTypeNoneSpecified, out resolved);
-        }
-
-        private bool InternalTryResolve(Type type, ResolverType? requiredResolverType, out object resolved)
-        {
-            IResolver resolver;
-            if (!TryGetResolver(type, out resolver))
-            {
-                if (_parentProvider != null && _parentProvider.TryResolve(type, out resolved))
-                {
-                    return true;
-                }
-
-                resolved = type.CreateDefault();
-                return false;
-            }
-
-            if (!Supports(resolver, requiredResolverType))
-            {
-                resolved = type.CreateDefault();
-                return false;
-            }
-
-            return InternalTryResolve(type, resolver, out resolved);
-        }
-
-        private bool TryGetResolver(Type type, out IResolver resolver)
-        {
-            if (_resolvers.TryGetValue(type, out resolver))
-            {
-                return true;
-            }
-
-            if (!type.GetTypeInfo().IsGenericType)
-            {
-                return false;
-            }
-
-            return _resolvers.TryGetValue(type.GetTypeInfo().GetGenericTypeDefinition(), out resolver);
-        }
-
-        private bool ShouldDetectCircularReferencesFor(IResolver resolver)
-        {
-            switch (resolver.ResolveType)
-            {
-                case ResolverType.DynamicPerResolve:
-                    return Options.TryToDetectDynamicCircularReferences;
-
-                case ResolverType.Singleton:
-                    return Options.TryToDetectSingletonCircularReferences;
-
-                case ResolverType.Unknown:
-                    throw new MvxException("A resolver must have a known type - error in {0}", resolver.GetType().Name);
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(resolver), "unknown resolveType of " + resolver.ResolveType);
-            }
-        }
-
-        private bool InternalTryResolve(Type type, IResolver resolver, out object resolved)
-        {
-            var detectingCircular = ShouldDetectCircularReferencesFor(resolver);
-            if (detectingCircular)
-            {
-                try
-                {
-                    _circularTypeDetection.Add(type, true);
-                }
-                catch (ArgumentException)
-                {
-                    // the item already exists in the lookup table
-                    // - this is "game over" for the IoC lookup
-                    // - see https://github.com/MvvmCross/MvvmCross/issues/553
-                    MvxLog.Instance.Error("IoC circular reference detected - cannot currently resolve {0}", type.Name);
-                    resolved = type.CreateDefault();
-                    return false;
-                }
-            }
-
-            try
-            {
-                if (resolver is ConstructingOpenGenericResolver)
-                {
-                    resolver.SetGenericTypeParameters(type.GetTypeInfo().GenericTypeArguments);
-                }
-
-                var raw = resolver.Resolve();
-                if (raw == null)
-                {
-                    throw new MvxException("Resolver returned null");
-                }
-                if (!type.IsInstanceOfType(raw))
-                {
-                    throw new MvxException("Resolver returned object type {0} which does not support interface {1}",
-                                           raw.GetType().FullName, type.FullName);
-                }
-
-                resolved = raw;
-                return true;
-            }
-            finally
-            {
-                if (detectingCircular)
-                {
-                    _circularTypeDetection.Remove(type);
-                }
-            }
-        }
-
-        private void InternalSetResolver(Type interfaceType, IResolver resolver)
-        {
-            List<Action> actions;
-            lock (_lockObject)
-            {
-                _resolvers[interfaceType] = resolver;
-                if (_waiters.TryGetValue(interfaceType, out actions))
-                {
-                    _waiters.Remove(interfaceType);
-                }
-            }
-
-            if (actions != null)
-            {
-                foreach (var action in actions)
-                {
-                    action();
-                }
-            }
-        }
-
-        protected virtual void InjectProperties(object toReturn)
-        {
-            _propertyInjector?.Inject(toReturn, _options.PropertyInjectorOptions);
-        }
-
-        protected virtual List<object> GetIoCParameterValues(Type type, ConstructorInfo selectedConstructor, IDictionary<string, object> arguments)
-        {
-            var parameters = new List<object>();
-            foreach (var parameterInfo in selectedConstructor.GetParameters())
-            {
-                if (arguments != null && arguments.ContainsKey(parameterInfo.Name))
-                {
-                    parameters.Add(arguments[parameterInfo.Name]);
-                }
-                else if (TryResolveParameter(type, parameterInfo, out var parameterValue))
-                {
-                    parameters.Add(parameterValue);
-                }
-            }
-            return parameters;
+            throw new NotImplementedException("This is not supported anymore. Please use Microsoft.Extensions.DependencyInjection instead.");
         }
         
-        protected virtual List<object> GetIoCParameterValues(Type type, ConstructorInfo selectedConstructor, object[] arguments)
-        {
-            var parameters = new List<object>();
-            var unusedArguments = arguments.ToList();
-            
-            foreach (var parameterInfo in selectedConstructor.GetParameters())
-            {
-                var argumentMatch = unusedArguments.FirstOrDefault(arg => parameterInfo.ParameterType.IsInstanceOfType(arg));
-                
-                if (argumentMatch != null)
-                {
-                    parameters.Add(argumentMatch);
-                    unusedArguments.Remove(argumentMatch);
-                }
-                else if (TryResolveParameter(type, parameterInfo, out var parameterValue))
-                {
-                    parameters.Add(parameterValue);
-                }
-            }
-            return parameters;
-        }
-
         private bool TryResolveParameter(Type type, ParameterInfo parameterInfo, out object parameterValue)
         {
             if (!TryResolve(parameterInfo.ParameterType, out parameterValue))
@@ -692,6 +438,49 @@ namespace MvvmCross.IoC
             }
 
             return true;
+        }
+        
+        private object[] GetIoCParameterValues(Type type, MethodBase selectedConstructor, IDictionary<string, object> arguments)
+        {
+            var parameters = new List<object>();
+            foreach (var parameterInfo in selectedConstructor.GetParameters())
+            {
+                if (arguments != null && arguments.ContainsKey(parameterInfo.Name))
+                {
+                    parameters.Add(arguments[parameterInfo.Name]);
+                }
+                else if (TryResolveParameter(type, parameterInfo, out var parameterValue))
+                {
+                    parameters.Add(parameterValue);
+                }
+            }
+            return parameters.ToArray();
+        }
+
+        private void CheckCollection()
+        {
+            if (ServiceCollection == null) throw new ArgumentNullException("Can't access ServiceCollection, since it has not been initialized yet.");
+            
+            if (!_options.InvalidateServiceProviderAtRegistrationsAfterBuild) return;
+            if (ServiceProvider == null) return;
+            
+            _iocServices.InvalidateServiceProvider();
+        }
+        
+        private void CheckProvider()
+        {
+            if (!_options.BuildServiceProviderAtFirstResolve)
+            {
+                if (ServiceProvider == null) throw new ArgumentNullException("Can't access ServiceProvider, since it has not been initialized yet.");                
+                return;
+            }
+            
+            if (ServiceProvider != null) return;
+            
+            _iocServices.BuildServiceProvider(new ServiceProviderOptions
+            {
+                ValidateOnBuild = _options.TryToDetectDynamicCircularReferences || _options.TryToDetectSingletonCircularReferences
+            });
         }
     }
 }

@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross.Converters;
 using MvvmCross.Plugin;
 using MvvmCross.Binding;
@@ -58,8 +59,8 @@ namespace MvvmCross.Platforms.Ios.Core
 
         protected virtual void RegisterIosViewCreator(IMvxIosViewsContainer container)
         {
-            Mvx.IoCProvider.RegisterSingleton<IMvxIosViewCreator>(container);
-            Mvx.IoCProvider.RegisterSingleton<IMvxCurrentRequest>(container);
+            ServiceCollection.AddSingleton<IMvxIosViewCreator>(container);
+            ServiceCollection.AddSingleton<IMvxCurrentRequest>(container);
         }
 
         protected override IMvxViewDispatcher CreateViewDispatcher()
@@ -78,7 +79,7 @@ namespace MvvmCross.Platforms.Ios.Core
 
         protected virtual void RegisterPlatformProperties()
         {
-            Mvx.IoCProvider.RegisterSingleton<IMvxIosSystem>(CreateIosSystemProperties());
+            ServiceCollection.AddSingleton<IMvxIosSystem>(CreateIosSystemProperties());
         }
 
         protected virtual MvxIosSystem CreateIosSystemProperties()
@@ -88,7 +89,7 @@ namespace MvvmCross.Platforms.Ios.Core
 
         protected virtual void RegisterLifetime()
         {
-            Mvx.IoCProvider.RegisterSingleton<IMvxLifetime>(ApplicationDelegate);
+            ServiceCollection.AddSingleton<IMvxLifetime>(ApplicationDelegate);
         }
 
         protected IMvxIosViewPresenter Presenter
@@ -108,13 +109,13 @@ namespace MvvmCross.Platforms.Ios.Core
         protected virtual void RegisterPresenter()
         {
             var presenter = Presenter;
-            Mvx.IoCProvider.RegisterSingleton(presenter);
-            Mvx.IoCProvider.RegisterSingleton<IMvxViewPresenter>(presenter);
+            ServiceCollection.AddSingleton(presenter);
+            ServiceCollection.AddSingleton<IMvxViewPresenter>(presenter);
         }
 
         protected virtual void RegisterPopoverPresentationSourceProvider()
         {
-            Mvx.IoCProvider.RegisterSingleton<IMvxPopoverPresentationSourceProvider>(CreatePopoverPresentationSourceProvider());
+            ServiceCollection.AddSingleton<IMvxPopoverPresentationSourceProvider>(CreatePopoverPresentationSourceProvider());
         }
 
         protected virtual IMvxPopoverPresentationSourceProvider CreatePopoverPresentationSourceProvider()

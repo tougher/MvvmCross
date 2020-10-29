@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MvvmCross.IoC
 {
@@ -169,18 +170,18 @@ namespace MvvmCross.IoC
             where TInterface : class
             where TType : class, TInterface
         {
-            ioc.RegisterSingleton<TInterface>(() => ioc.IoCConstruct<TType>());
+            ioc.ServiceCollection.AddSingleton<TInterface, TType>();
         }
 
         public static void LazyConstructAndRegisterSingleton<TInterface>(this IMvxIoCProvider ioc, Func<TInterface> constructor)
             where TInterface : class
         {
-            ioc.RegisterSingleton<TInterface>(constructor);
+            ioc.ServiceCollection.AddSingleton(sp => constructor());
         }
 
         public static void LazyConstructAndRegisterSingleton(this IMvxIoCProvider ioc, Type type, Func<object> constructor)
         {
-            ioc.RegisterSingleton(type, constructor);
+            ioc.ServiceCollection.AddSingleton(type, sp => constructor());
         }
 
         public static void LazyConstructAndRegisterSingleton<TInterface, TParameter1>(this IMvxIoCProvider ioc, Func<TParameter1, TInterface> constructor)

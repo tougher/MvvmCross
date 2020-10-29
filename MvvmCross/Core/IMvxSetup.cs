@@ -7,6 +7,7 @@ using System.Reflection;
 using MvvmCross.Plugin;
 using MvvmCross.Logging;
 using System;
+using Microsoft.Extensions.DependencyInjection;
 using static MvvmCross.Core.MvxSetup;
 
 namespace MvvmCross.Core
@@ -14,7 +15,7 @@ namespace MvvmCross.Core
     public interface IMvxSetup
     {
         void InitializePrimary();
-        void InitializeSecondary();
+        IServiceProvider InitializeSecondary();
 
         IEnumerable<Assembly> GetViewAssemblies();
         IEnumerable<Assembly> GetViewModelAssemblies();

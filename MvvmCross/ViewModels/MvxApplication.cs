@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross.IoC;
 using MvvmCross.Logging;
 using MvvmCross.Plugin;
@@ -24,6 +25,8 @@ namespace MvvmCross.ViewModels
                 return _defaultLocator;
             }
         }
+        
+        public IMvxIocServices IocServices { get; set; }
 
         protected virtual IMvxViewModelLocator CreateDefaultViewModelLocator()
         {
@@ -70,24 +73,27 @@ namespace MvvmCross.ViewModels
         protected void RegisterCustomAppStart<TMvxAppStart>()
             where TMvxAppStart : class, IMvxAppStart
         {
-            Mvx.IoCProvider.ConstructAndRegisterSingleton<IMvxAppStart, TMvxAppStart>();
+            var appStart = ActivatorUtilities.CreateInstance<TMvxAppStart>(IocServices.ServiceProvider);
+            IocServices.ServiceCollection.AddSingleton(appStart);
         }
 
         protected void RegisterAppStart<TViewModel>()
             where TViewModel : IMvxViewModel
         {
-            Mvx.IoCProvider.ConstructAndRegisterSingleton<IMvxAppStart, MvxAppStart<TViewModel>>();
+            var appStart = ActivatorUtilities.CreateInstance<MvxAppStart<TViewModel>>(IocServices.ServiceProvider);
+            IocServices.ServiceCollection.AddSingleton(appStart);
         }
 
         protected void RegisterAppStart(IMvxAppStart appStart)
         {
-            Mvx.IoCProvider.RegisterSingleton(appStart);
+            IocServices.ServiceCollection.AddSingleton(appStart);
         }
 
         protected virtual void RegisterAppStart<TViewModel, TParameter>()
           where TViewModel : IMvxViewModel<TParameter> where TParameter : class
         {
-            Mvx.IoCProvider.ConstructAndRegisterSingleton<IMvxAppStart, MvxAppStart<TViewModel, TParameter>>();
+            var appStart = ActivatorUtilities.CreateInstance<MvxAppStart<TViewModel, TParameter>>(IocServices.ServiceProvider);
+            IocServices.ServiceCollection.AddSingleton(appStart);
         }
 
         protected IEnumerable<Type> CreatableTypes()

@@ -3,7 +3,10 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Runtime.CompilerServices;
 using MvvmCross.Logging.LogProviders;
+
+[assembly: InternalsVisibleTo("MvvmCross.UnitTest")]
 
 namespace MvvmCross.Logging
 {

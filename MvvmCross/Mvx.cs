@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross.Base;
 using MvvmCross.IoC;
 
@@ -18,8 +19,24 @@ namespace MvvmCross
         public static IMvxIoCProvider IoCProvider => MvxSingleton<IMvxIoCProvider>.Instance;
         
         /// <summary>
-        /// Returns a singleton instance of the IServiceProvider. If possible use dependency injection instead.
+        /// Returns a singleton instance of the IServiceCollection to register services.
+        /// This gets set by the MvxSetup.
+        /// If possible use dependency injection instead.
         /// </summary>
-        public static IServiceProvider ServiceProvider => MvxSingleton<IServiceProvider>.Instance;
+        public static IServiceCollection ServiceCollection
+        {
+            get;
+            internal set;
+        }
+        
+        /// <summary>
+        /// Returns a singleton instance of the IServiceProvider to resolve services.
+        /// This gets set by the MvxSetup.
+        /// If possible use dependency injection instead.
+        /// </summary>
+        public static IServiceProvider ServiceProvider {
+            get;
+            internal set;
+        }
     }
 }

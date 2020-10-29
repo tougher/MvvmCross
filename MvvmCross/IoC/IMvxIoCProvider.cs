@@ -7,7 +7,8 @@ using System.Collections.Generic;
 
 namespace MvvmCross.IoC
 {
-    public interface IMvxIoCProvider
+    [Obsolete("Use Microsoft.Extensions.DependencyInjection instead")]
+    public interface IMvxIoCProvider : IMvxIocServices
     {
         bool CanResolve<T>()
             where T : class;

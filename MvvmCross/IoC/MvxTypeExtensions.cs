@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using MvvmCross.Exceptions;
 using MvvmCross.Logging;
 
@@ -194,7 +195,7 @@ namespace MvvmCross.IoC
             }
         }
 
-        public static void RegisterAsLazySingleton(this IEnumerable<ServiceTypeAndImplementationTypePair> pairs)
+        public static void RegisterAsLazySingleton(this IEnumerable<ServiceTypeAndImplementationTypePair> pairs, IServiceCollection serviceCollection)
         {
             foreach (var pair in pairs)
             {
@@ -206,7 +207,7 @@ namespace MvvmCross.IoC
                 var creationFunc = new Func<object>(() => creator.Instance);
                 foreach (var serviceType in pair.ServiceTypes)
                 {
-                    Mvx.IoCProvider.RegisterSingleton(serviceType, creationFunc);
+                    serviceCollection.AddSingleton(serviceType, creationFunc);
                 }
             }
         }
